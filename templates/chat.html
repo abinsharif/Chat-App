@@ -1,0 +1,126 @@
+{% extends "layout.html" %}
+
+{% block title %}Chat Room{% endblock %}
+
+{% block content %}
+<style>
+    {% for i in range(colors|length) %}
+    .color-{{ i + 1 }} { color: {{ colors[i] }}; }
+    {% endfor %}
+</style>
+
+<div class="row">
+    <div class="col-md-9">
+        <div class="messages-container" id="messages">
+            {% for message in messages %}
+            <div class="message">
+                <strong class="color-{{ message[3] }}">{{ message[1] }}</strong>
+                <small class="text-muted">{{ message[2] }}</small>
+                <p class="mb-0">{{ message[0] }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <form id="message-form" class="mb-3">
+            <div class="input-group">
+                <input type="text" id="message-input" class="form-control" placeholder="Type your message..." required autocomplete='off' autofocus>
+                <button class="btn btn-primary" type="submit">Send</button>
+            </div>
+        </form>
+    </div>
+    
+    <div class="col-md-3">
+        <div>
+            <p>You are logged in as <span class="color-{{ session['color_id'] }}"><b>{{ session['username'] }}</b></span>.</p>
+        </div>
+        <div class="online-users">
+            <h5>Online Users</h5>
+            <ul class="list-unstyled" id="online-users-list">
+                {% for user in online_users %}
+                <li>
+                    <span class="text-success">●</span> 
+                    <span class="color-{{ user[1] }}">{{ user[0] }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+<audio id="notification-sound" src="{{ url_for('static', filename='notification.mp3') }}" preload="auto"></audio>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+
+    const socket = io();
+    const messagesDiv = document.getElementById('messages');
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    const onlineUsersList = document.getElementById('online-users-list');
+    const notificationSound = document.getElementById('notification-sound');
+    const currentUsername = "{{ session['username'] }}";
+    function requestNotificationPermission() {
+        if (!("Notification" in window)) {
+            console.log("This browser does not support desktop notification");
+        } else if (Notification.permission !== "denied") {
+            Notification.requestPermission();
+        }
+    }
+    function showNotification(username, message) {
+        if (Notification.permission === "granted") {
+            const notification = new Notification("New message from " + username, {
+                body: message,
+                icon: "../static/favicon.ico"
+            });
+            notification.onclick = function() {
+                window.focus();
+                this.close();
+            };
+        }
+    }
+    requestNotificationPermission();
+
+    socket.on('new_message', function(data) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message';
+        const isOwnMessage = data.username === currentUsername;
+        if(isOwnMessage) {
+            messageDiv.classList.add('own-message');
+        }
+        
+        messageDiv.innerHTML = `
+            <strong class="color-${data.color_id}">${data.username}</strong>
+            <small class="text-muted">${data.timestamp}</small>
+            <p class="mb-0">${data.message}</p>
+        `;
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        
+        // Only show notification if it's not the user's own message and the page is not visible
+        if(!isOwnMessage && document.hidden) {
+            showNotification(data.username, data.message);
+            console.log('notify');
+        } else if (!isOwnMessage && !document.hidden) {
+            notificationSound.play();
+            console.log('sound');
+        }
+    });
+    // Handle online users update
+    socket.on('update_users', function(users) {
+        onlineUsersList.innerHTML = users.map(user => 
+            `<li><span class="text-success">●</span> ${user}</li>`
+        ).join('');
+    });
+
+    // Send message
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (messageInput.value.trim()) {
+            socket.emit('send_message', {
+                message: messageInput.value
+            });
+            messageInput.value = '';
+        }
+    });
+</script>
+{% endblock %}
