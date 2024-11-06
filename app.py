@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from datetime import datetime
-import sqlite3
+import sqlite3, os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret_key_here'
@@ -198,4 +198,5 @@ def get_online_users():
     pass
 
 if __name__ == '__main__':
-    socketio.run(app, host='192.168.0.104', port=1234, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port)
