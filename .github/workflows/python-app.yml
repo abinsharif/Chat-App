@@ -36,6 +36,4 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
-        export FLASK_APP=app.py  # Change this to your main Flask app file
-        export FLASK_ENV=development  # Set environment to development
-        flask run --host=0.0.0.0 --port=5000
+        flask run
