@@ -14,13 +14,12 @@
         <div class="messages-container" id="messages">
             {% for message in messages %}
             <div class="message">
-                <strong class="color-{{ message[3] }}">{{ message[1] }}</strong>
+                <strong class="color-{{ message[3] }}">{{ message[1] | e }}</strong> <!-- Escape username -->
                 <small class="text-muted">{{ message[2] }}</small>
-                <p class="mb-0">{{ message[0] }}</p>
+                <p class="mb-0">{{ message[0] | e }}</p>  <!-- Escape message -->
             </div>
             {% endfor %}
         </div>
-        
         <form id="message-form" class="mb-3">
             <div class="input-group">
                 <input type="text" id="message-input" class="form-control" placeholder="Type your message..." required autocomplete='off' autofocus>
@@ -51,7 +50,6 @@
 
 {% block extra_js %}
 <script>
-
     const socket = io();
     const messagesDiv = document.getElementById('messages');
     const messageForm = document.getElementById('message-form');
@@ -59,6 +57,17 @@
     const onlineUsersList = document.getElementById('online-users-list');
     const notificationSound = document.getElementById('notification-sound');
     const currentUsername = "{{ session['username'] }}";
+
+    // Function to scroll to the bottom of the messages container
+    function scrollToBottom() {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    // Call scrollToBottom on page load
+    window.onload = function() {
+        scrollToBottom();
+    };
+
     function requestNotificationPermission() {
         if (!("Notification" in window)) {
             console.log("This browser does not support desktop notification");
@@ -66,6 +75,7 @@
             Notification.requestPermission();
         }
     }
+    
     function showNotification(username, message) {
         if (Notification.permission === "granted") {
             const notification = new Notification("New message from " + username, {
@@ -94,7 +104,7 @@
             <p class="mb-0">${data.message}</p>
         `;
         messagesDiv.appendChild(messageDiv);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll down on new message
         
         // Only show notification if it's not the user's own message and the page is not visible
         if(!isOwnMessage && document.hidden) {
@@ -105,6 +115,7 @@
             console.log('sound');
         }
     });
+
     // Handle online users update
     socket.on('update_users', function(users) {
         onlineUsersList.innerHTML = users.map(user => 

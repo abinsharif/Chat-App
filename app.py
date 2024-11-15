@@ -1,51 +1,14 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from datetime import datetime
-import sqlite3, os
+import sqlite3, os, bleach, html
+from utils import logged_in, get_next_color_id, init_db, COLORS
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret_key_here'
 socketio = SocketIO(app)
 connected_users = {}
-
-COLORS = [
-    'lime', 'orange', 'blue', 'red', 'purple',
-    'brown', 'black', 'green', 'deeppink', 'yellowgreen',
-    'gray', 'deepskyblue', 'peru', 'violet', 'crimson',
-    'darkolivegreen', 'blueviolet', 'tomato', 'darkblue', 'indigo'
-]
-
-def get_next_color_id():
-    with sqlite3.connect('users.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT MAX(color_id) FROM users')
-        last_color = cursor.fetchone()[0]
-        if last_color is None:
-            return 1
-        return (last_color % len(COLORS)) + 1
-    
-def init_db():
-    with sqlite3.connect('users.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                is_online BOOLEAN DEFAULT 0,
-                color_id INTEGER DEFAULT 1
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sender_id INTEGER NOT NULL,
-                message TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (sender_id) REFERENCES users (id)
-            )
-        ''')
-        conn.commit()
 
 # Initialize the database
 init_db()
@@ -58,14 +21,20 @@ def home():
 def register():
     if request.method == 'POST':
         username = request.form['username']
+        # Sanitize the username to remove any HTML tags
+        sanitized_username = bleach.clean(username)
+
         password = request.form['password']
         color_id = get_next_color_id()
+        
+        # Hash the password
+        hashed_password = generate_password_hash(password)
         
         with sqlite3.connect('users.db') as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute('INSERT INTO users (username, password, color_id) VALUES (?, ?, ?)', 
-                             (username, password, color_id))
+                               (sanitized_username, hashed_password, color_id))
                 conn.commit()
                 flash('Registration successful! Please log in.', 'success')
                 return redirect(url_for('login'))
@@ -83,17 +52,15 @@ def login():
         
         with sqlite3.connect('users.db') as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT id, color_id FROM users WHERE username = ? AND password = ?', 
-                         (username, password))
+            cursor.execute('SELECT id, password, color_id FROM users WHERE username = ?', (username,))
             user = cursor.fetchone()
             
-            if user:
+            if user and check_password_hash(user[1], password):  # Verify the hashed password
                 session['user_id'] = user[0]
                 session['username'] = username
-                session['color_id'] = user[1]
+                session['color_id'] = user[2]
                 # Set user as online
-                cursor.execute('UPDATE users SET is_online = 1 WHERE id = ?', 
-                             (user[0],))
+                cursor.execute('UPDATE users SET is_online = 1 WHERE id = ?', (user[0],))
                 conn.commit()
                 flash('Login successful!', 'success')
                 return redirect(url_for('chat'))
@@ -116,11 +83,8 @@ def logout():
     return redirect(url_for('home'))
 
 @app.route('/chat')
+@logged_in
 def chat():
-    if 'user_id' not in session:
-        flash('Please login first.', 'error')
-        return redirect(url_for('login'))
-    
     with sqlite3.connect('users.db') as conn:
         cursor = conn.cursor()
         # Get all messages with sender usernames and colors
@@ -139,10 +103,8 @@ def chat():
     return render_template('chat.html',messages=messages,online_users=online_users,colors=COLORS)
 
 @app.route('/send_message', methods=['POST'])
+@logged_in
 def send_message():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-    
     message = request.form.get('message')
     if message:
         with sqlite3.connect('users.db') as conn:
@@ -170,14 +132,17 @@ def handle_disconnect():
 @socketio.on('send_message')
 def handle_send_message(data):
     if 'user_id' in session:
+        message = data['message']
+        # Escape HTML characters to prevent XSS
+        escaped_message = html.escape(message)
+
         with sqlite3.connect('users.db') as conn:
             cursor = conn.cursor()
-            cursor.execute('INSERT INTO messages (sender_id, message) VALUES (?, ?)',
-                         (session['user_id'], data['message']))
+            cursor.execute('INSERT INTO messages (sender_id, message) VALUES (?, ?)',(session['user_id'], escaped_message))
             conn.commit()
             
             response = {
-                'message': data['message'],
+                'message': escaped_message,
                 'username': session['username'],
                 'color_id': session['color_id'],
                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
