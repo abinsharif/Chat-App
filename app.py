@@ -109,8 +109,7 @@ def send_message():
     if message:
         with sqlite3.connect('users.db') as conn:
             cursor = conn.cursor()
-            cursor.execute('INSERT INTO messages (sender_id, message) VALUES (?, ?)',
-                         (session['user_id'], message))
+            cursor.execute('INSERT INTO messages (sender_id, message) VALUES (?, ?)',(session['user_id'], message))
             conn.commit()
     
     return redirect(url_for('chat'))
