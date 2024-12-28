@@ -162,5 +162,5 @@ def get_online_users():
     pass
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port)
+    #port = int(os.environ.get('PORT', 1234))
+    socketio.run(app, debug=True, host='192.168.0.105', port=1234)
