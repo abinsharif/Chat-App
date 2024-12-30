@@ -6,7 +6,7 @@ from utils import logged_in, get_next_color_id, init_db, COLORS
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret_key_here'
+app.config['SECRET_KEY'] = 'nothing'
 socketio = SocketIO(app)
 connected_users = {}
 

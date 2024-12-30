@@ -22,12 +22,12 @@
         </div>
         <form id="message-form" class="mb-3">
             <div class="input-group">
-                <select id="receiver-select" class="form-control">
+                <!--select id="receiver-select" class="form-control">
                     <option value="everyone">Everyone</option>
                     {% for user in online_users %}
                         <option value="{{ user[0] }}">{{ user[0] }}</option>
                     {% endfor %}
-                </select>
+                </select-->
                 <input type="text" id="message-input" class="form-control" placeholder="Type your message..." required autocomplete='off' autofocus>
                 <button class="btn btn-primary" type="submit">Send</button>
             </div>
